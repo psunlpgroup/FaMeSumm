@@ -1,0 +1,1 @@
+{"content": [{"speaker": "患者", "utterance": ""}, {"speaker": "医生", "utterance": ""}, {"speaker": "医生", "utterance": ""}], "summary": {"description": "", "type-B": ""}, "id": 1, "2_medical": [], "1_medical": []}
