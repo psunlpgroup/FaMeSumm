@@ -25,7 +25,7 @@ Once the raw datasets are collected, check `sample_datasets` folder to see how w
 
 
 ## Contrastive Sets Construction
-After datasets are built, please refer to [`contrastive_sets_construction`](/contrastive_sets_construction) folder to build constrastive sets. These sets are necessary for running the our training pipeline.
+After datasets are built, please refer to [contrastive_sets_construction](/contrastive_sets_construction) folder to build constrastive sets. These sets are necessary for running the our training pipeline.
 
 ## Models and Experiments
 First of all, install all required Python packages with `pip install -r requirements.txt`. We have tested these library versions to ensure the reproducibility of the reported performance scores when trained checkpoints are provided.
