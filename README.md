@@ -28,3 +28,11 @@ Once the raw datasets are collected, check `sample_datasets` folder to see how w
 
 
 ## Models and Experiments
+First of all, install all required Python packages with `pip install -r requirements.txt`. We have tested these library versions to ensure the reproducibility of the reported performance scores when trained checkpoints are provided.
+
+We provide the trained checkpoints of FaMeSumm models below:
+* [FaMeSumm + PEGASUS on HQS](https://pennstateoffice365-my.sharepoint.com/:u:/g/personal/njz5124_psu_edu/EedGT4rB3p9Oh-VhN0S05hMBfMaWRmeP_13JxDnalOcnhQ?e=MRMXMQ)
+* [FaMeSumm + BART on HQS](https://pennstateoffice365-my.sharepoint.com/:u:/g/personal/njz5124_psu_edu/ES-_bacefARDgDbqoLdgD9IBjNS0kZBBeGeNT33LPmbclg?e=6eTaak)
+* [FaMeSumm + T5 on HQS](https://pennstateoffice365-my.sharepoint.com/:u:/g/personal/njz5124_psu_edu/EUXXGGNNZ0ZDvKesNYNBSS8BrmVCSXZ1S3HKRsvEPVWZzw?e=fIVRsY)
+* [FaMeSumm + BioBART on HQS](https://pennstateoffice365-my.sharepoint.com/:u:/g/personal/njz5124_psu_edu/EUiqjFY7YJlGnmQvAoUzObUBVtS3tmwB-rNkYVTWtUlvog?e=dZDfzE)
+* [FaMeSumm + PEGASUS on RRS-Stanford](https://pennstateoffice365-my.sharepoint.com/:u:/g/personal/njz5124_psu_edu/Eap7sPuQVHdCpa9TyBCNS0AB-oyrnpbBRQbeR_EDUPDFUQ?e=ACpVrN)
