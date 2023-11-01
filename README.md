@@ -35,4 +35,5 @@ We provide the trained checkpoints of FaMeSumm models below:
 * [FaMeSumm + BART on HQS](https://pennstateoffice365-my.sharepoint.com/:u:/g/personal/njz5124_psu_edu/ES-_bacefARDgDbqoLdgD9IBjNS0kZBBeGeNT33LPmbclg?e=6eTaak)
 * [FaMeSumm + T5 on HQS](https://pennstateoffice365-my.sharepoint.com/:u:/g/personal/njz5124_psu_edu/EUXXGGNNZ0ZDvKesNYNBSS8BrmVCSXZ1S3HKRsvEPVWZzw?e=fIVRsY)
 * [FaMeSumm + BioBART on HQS](https://pennstateoffice365-my.sharepoint.com/:u:/g/personal/njz5124_psu_edu/EUiqjFY7YJlGnmQvAoUzObUBVtS3tmwB-rNkYVTWtUlvog?e=dZDfzE)
+* [FaMeSumm + PEGASUS on RRS-Indiana](https://pennstateoffice365-my.sharepoint.com/:u:/g/personal/njz5124_psu_edu/EQ63sMuonjVPoYQflrdJYGwBBzD09E8xezPNKdtCCWstXA?e=m08Pv2)
 * [FaMeSumm + PEGASUS on RRS-Stanford](https://pennstateoffice365-my.sharepoint.com/:u:/g/personal/njz5124_psu_edu/Eap7sPuQVHdCpa9TyBCNS0AB-oyrnpbBRQbeR_EDUPDFUQ?e=ACpVrN)
