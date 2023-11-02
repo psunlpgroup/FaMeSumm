@@ -17,7 +17,7 @@ We introduce **FaMeSumm**, a framework to improve **Fa**thfulness for **Me**dica
 
 
 ## Datasets
-We have tested FaMeSumm on different kinds of datassets to demonstrate its capability on various medical summarization tasks: Health Question Summarization (HQS),  Radiology Report Summarization (RRS), and Medical Dialogue Summarization (MDS). We are not allowed to share these datasets due to legal concerns, so we recommed to collect them by yourself. You may need to complete user agreement or crawl data on your own.
+We have tested FaMeSumm on different kinds of datassets to demonstrate its capability on various medical summarization tasks: Health Question Summarization (HQS),  Radiology Report Summarization (RRS), and Medical Dialogue Summarization (MDS). We are not allowed to share these datasets due to legal concerns, so we recommed to collect them by yourself. You may need to complete corresponding user agreement or crawl data on your own.
 1. HQS: The first task of [MEDIQA 2021](https://sites.google.com/view/mediqa2021). The goal of this task is to summarize potentially complex consumer health questions.
 2. RRS: The third task of [MEDIQA 2021](https://sites.google.com/view/mediqa2021). This task comes with two test splits (benchmarks): Indiana and Stanford. The goal of this task is to summarize the textual findings of radiology report written by radiologists.
 3. MDS: A private Chinese dataset for medical dialogue summarization. We train models on this dataset to test their capabilities on understanding and summarizing doctor-patient conversations. To reproduce a dataset similar to our MDS, please refer to Appendix B of our paper to see the detailed data collection process.
@@ -39,6 +39,7 @@ We provide the trained checkpoints of FaMeSumm models below:
 * [FaMeSumm + PEGASUS on RRS-Indiana](https://pennstateoffice365-my.sharepoint.com/:u:/g/personal/njz5124_psu_edu/EQ63sMuonjVPoYQflrdJYGwBBzD09E8xezPNKdtCCWstXA?e=m08Pv2)
 * [FaMeSumm + PEGASUS on RRS-Stanford](https://pennstateoffice365-my.sharepoint.com/:u:/g/personal/njz5124_psu_edu/Eap7sPuQVHdCpa9TyBCNS0AB-oyrnpbBRQbeR_EDUPDFUQ?e=ACpVrN)
 
+To fine-tune language models:
 
 ## Repository Structure
 
