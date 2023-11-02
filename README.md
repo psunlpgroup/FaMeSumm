@@ -39,7 +39,29 @@ We provide the trained checkpoints of FaMeSumm models below:
 * [FaMeSumm + PEGASUS on RRS-Indiana](https://pennstateoffice365-my.sharepoint.com/:u:/g/personal/njz5124_psu_edu/EQ63sMuonjVPoYQflrdJYGwBBzD09E8xezPNKdtCCWstXA?e=m08Pv2)
 * [FaMeSumm + PEGASUS on RRS-Stanford](https://pennstateoffice365-my.sharepoint.com/:u:/g/personal/njz5124_psu_edu/Eap7sPuQVHdCpa9TyBCNS0AB-oyrnpbBRQbeR_EDUPDFUQ?e=ACpVrN)
 
-To fine-tune language models:
+Without using these checkpoints, you may fine-tune language models:
+
+    # fine-tune PEGASUS on HQS
+    python train_pega_HQS.py
+
+    # fine-tune BART on HQS
+    python train_bart_HQS.py
+
+    # fine-tune T5 on HQS
+    python train_t5_HQS.py
+
+    #fine-tune BioBART on HQS
+    python train_BioBART_HQS.py
+
+    #fine-tune PEGASUS on RRS (code is the same for both Indiana and Stanford except that different validation sets are used)
+    python train_pega_RRS.py
+
+    #fine-tune mT5 on MDS
+    python train_mt5_MDS.py
+
+You will need to provide the API key of your WandB account in line 36 or 38. All these training files require `ALL_medical_term_file_train.txt`, so you will need to collect all medical terms of the training set for each dataset (check `ALL_medical_term_file_Chinese.txt` in [contrastive_sets_construction](/contrastive_sets_construction) as an example).
+
+To do inference:
 
 ## Repository Structure
 
