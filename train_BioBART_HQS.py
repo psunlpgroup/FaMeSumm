@@ -27,15 +27,15 @@ import scipy.special
 
 from transformers import (
     AdamW,
-    PegasusForConditionalGeneration,
-    PegasusTokenizer,
-    get_linear_schedule_with_warmup
+    get_linear_schedule_with_warmup,
+    AutoModelForSeq2SeqLM,
+    AutoTokenizer
 )
 
 import wandb
 YOUR_API_KEY = ''
 os.environ["WANDB_API_KEY"] = YOUR_API_KEY
-wandb_logger = WandbLogger(project='MQA_Pega')
+wandb_logger = WandbLogger(project='MQA_Bart')
 
 
 def set_seed(seed):
@@ -46,12 +46,12 @@ def set_seed(seed):
         torch.cuda.manual_seed_all(seed)
 
 
-class PegaFineTuner(pl.LightningModule):
+class BartFineTuner(pl.LightningModule):
     def __init__(self, hparams):
-        super(PegaFineTuner, self).__init__()
+        super(BartFineTuner, self).__init__()
         self.hparams = hparams
-        self.model = PegasusForConditionalGeneration.from_pretrained(hparams.model_name_or_path)
-        self.tokenizer = PegasusTokenizer.from_pretrained(hparams.tokenizer_name_or_path, use_fast=False)
+        self.model = AutoModelForSeq2SeqLM.from_pretrained(hparams.model_name_or_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(hparams.tokenizer_name_or_path, use_fast=False)
         self.training_data = Resource(tokenizer=self.tokenizer, type_path="train", num_samples=None, input_length=self.hparams.max_input_length, output_length=self.hparams.max_output_length)
         
         if self.hparams.freeze_embeds:
@@ -77,7 +77,7 @@ class PegaFineTuner(pl.LightningModule):
             
             
     def freeze_embeds(self):
-        """Freeze token embeddings and positional embeddings for bart, just token embeddings for PEGASUS."""
+        """Freeze token embeddings and positional embeddings for bart, just token embeddings for BART."""
         try:
             self.freeze_params(self.model.model.shared)
             for d in [self.model.model.encoder, self.model.model.decoder]:
@@ -153,7 +153,7 @@ class PegaFineTuner(pl.LightningModule):
                 total_att = torch.mean(outputs.logits[i], 0) # reduce sequence_length
 
                 idx = batch["id"][i].item()
-                medical_terms_2, neg_uni = self.training_data[idx]['medical_terms_2'] + self.training_data[idx]['medical_terms_1'], self.training_data[idx]['neg_uni']
+                medical_terms_2, position_list, neg_uni = self.training_data[idx]['medical_terms_2'] + self.training_data[idx]['medical_terms_1'], self.training_data[idx]['position_list'], self.training_data[idx]['neg_uni']
                 source = batch_labels[i]
 
                 # update negation_loss
@@ -173,8 +173,14 @@ class PegaFineTuner(pl.LightningModule):
 
                 # update medical_loss
                 if len(medical_terms_2) > 0:
-                    for term in medical_terms_2:
-                        id_comb = medical_term_ids[term]
+                    for m in range(len(medical_terms_2)):
+                        if position_list[m] == 1:
+                            id_comb = medical_term_ids_mid[medical_terms_2[m]]
+                        elif position_list[m] == 0:
+                            id_comb = medical_term_ids_begin[medical_terms_2[m]]
+                        elif position_list[m] == 2:
+                            id_comb = torch.unique(torch.cat((medical_term_ids_mid[medical_terms_2[m]], medical_term_ids_begin[medical_terms_2[m]])))
+
                         for j in range(id_comb.size()[0]):
                             vocab_id = id_comb[j].item()
                             presence_vocab = (source == vocab_id).nonzero(as_tuple=True)[0].tolist()
@@ -260,10 +266,9 @@ class PegaFineTuner(pl.LightningModule):
             attention_mask=batch["source_mask"],
             use_cache=True,
             decoder_attention_mask=batch['target_mask'],
-            max_length=168, 
-            num_beams=2,
-            repetition_penalty=1.5, 
-            length_penalty=1.4, 
+            max_length=512, 
+            num_beams=5,
+            repetition_penalty=1.5,
             early_stopping=True
         )
         preds = self.ids_to_clean_text(generated_ids)
@@ -301,8 +306,8 @@ class PegaFineTuner(pl.LightningModule):
     
   
     def validation_epoch_end(self, outputs):
-        avg_loss = torch.cat([x["val_loss"] for x in outputs]).mean()
-        # avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
+        # avg_loss = torch.cat([x["val_loss"] for x in outputs]).mean()
+        avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
         tensorboard_logs = {"val_loss": avg_loss}
         return {"avg_val_loss": avg_loss, "log": tensorboard_logs, 'progress_bar': tensorboard_logs}
 
@@ -321,7 +326,7 @@ class PegaFineTuner(pl.LightningModule):
                 "weight_decay": 0.0,
             },
         ]
-        optimizer = AdamW(optimizer_grouped_parameters, lr=self.hparams.learning_rate, weight_decay=0.0, eps=self.hparams.adam_epsilon)
+        optimizer = AdamW(optimizer_grouped_parameters, lr=self.hparams.learning_rate, eps=self.hparams.adam_epsilon)
         self.opt = optimizer
         return [optimizer]
 
@@ -397,6 +402,30 @@ class Resource(Dataset):
                 d["headline"] = patientDict["summary"]
                 d["medical_terms_both"] = patientDict["2_medical"]
                 d["medical_terms_one"] = patientDict["1_medical"]
+                
+                # encode the position of each medical term to accomadate BART-based models
+                position_list = []
+                for m in d["medical_terms_both"]:
+                    test_str = d["headline"]
+                    res = [i for i in range(len(test_str)) if test_str.startswith(m, i)]
+                    if len(res) > 1 and res[0] == 0:
+                        position_list.append(2)
+                    elif len(res) > 0 and res[0] == 0:
+                        position_list.append(0)
+                    elif len(res) > 0 and res[0] > 0:
+                        position_list.append(1)
+
+                for m in d["medical_terms_one"]:
+                    test_str = d["headline"]
+                    res = [i for i in range(len(test_str)) if test_str.startswith(m, i)]
+                    if len(res) > 1 and res[0] == 0:
+                        position_list.append(2)
+                    elif len(res) > 0 and res[0] == 0:
+                        position_list.append(0)
+                    elif len(res) > 0 and res[0] > 0:
+                        position_list.append(1)
+                d["position_list"] = position_list
+
                 d["neg_uni"] = patientDict["neg_uni"]
                 
                 d["pos"] = []
@@ -471,9 +500,10 @@ class Resource(Dataset):
 
         medical_terms_2 = self.dataset[index]["medical_terms_both"]
         medical_terms_1 = self.dataset[index]["medical_terms_one"]
+        position_list = self.dataset[index]["position_list"]
         neg_uni = self.dataset[index]["neg_uni"]
 
-        return {"source_ids": source_ids, "source_mask": src_mask, "target_ids": target_ids, "target_mask": target_mask, "pos_set": pos_set, "neg_set": neg_set, "medical_terms_2": medical_terms_2, "medical_terms_1": medical_terms_1, "neg_uni": neg_uni}
+        return {"source_ids": source_ids, "source_mask": src_mask, "target_ids": target_ids, "target_mask": target_mask, "pos_set": pos_set, "neg_set": neg_set, "medical_terms_2": medical_terms_2, "medical_terms_1": medical_terms_1, "position_list": position_list, "neg_uni": neg_uni}
 
 
 
@@ -546,25 +576,39 @@ class OwnData(Dataset):
 set_seed(42)
 
 
-medical_term_ids, tokenizer = {}, PegasusTokenizer.from_pretrained('google/pegasus-large', use_fast=False)
+medical_term_ids_begin, medical_term_ids_mid, tokenizer = {}, {}, AutoTokenizer.from_pretrained('GanjinZero/biobart-large', use_fast=False)
 with open('HQS_dataset/ALL_medical_term_file_train.txt', 'r', encoding='utf8') as f:
     custom_noun = f.readlines()
     for i in range(len(custom_noun)):
         medical_term = custom_noun[i].replace('\n', '')
         ids = tokenizer.batch_encode_plus([medical_term], truncation=True, return_tensors="pt")['input_ids'][0]
-        # remove 1
-        if ids[-1].item() == 1:
+        # remove 0 at the beginning
+        if ids[0].item() == 0:
+            ids = torch.cat([ids[0:0], ids[1:]])
+        # remove 2 in the end
+        if ids[-1].item() == 2:
             ids = torch.cat([ids[0:ids.size()[0]-1], ids[ids.size()[0]:]])
-        
-        medical_term_ids[medical_term] = ids
+        medical_term_ids_begin[medical_term] = ids
+
+        ids = tokenizer.batch_encode_plus([" " + medical_term], truncation=True, return_tensors="pt")['input_ids'][0]
+        # remove 0 at the beginning
+        if ids[0].item() == 0:
+            ids = torch.cat([ids[0:0], ids[1:]])
+        # remove 2 in the end
+        if ids[-1].item() == 2:
+            ids = torch.cat([ids[0:ids.size()[0]-1], ids[ids.size()[0]:]])
+        medical_term_ids_mid[medical_term] = ids
 print("Finished reading medical_term_file.txt !")
 
 
 neg_unigrams, neg_unigrams_ids = ["no", "nope", "doesn't", "don't", "not"], {}
 for e in neg_unigrams:
-    ids = tokenizer.batch_encode_plus([e], truncation=True, return_tensors="pt")['input_ids'][0]
-    # remove 1
-    if ids[-1].item() == 1:
+    ids = tokenizer.batch_encode_plus([" " + e], truncation=True, return_tensors="pt")['input_ids'][0]
+    # remove 0 at the beginning
+    if ids[0].item() == 0:
+        ids = torch.cat([ids[0:0], ids[1:]])
+    # remove 2 in the end
+    if ids[-1].item() == 2:
         ids = torch.cat([ids[0:ids.size()[0]-1], ids[ids.size()[0]:]])
     
     neg_unigrams_ids[e] = ids
@@ -573,22 +617,22 @@ print("Finished construction of neg_unigrams_ids!")
 
 logger = logging.getLogger(__name__)
 args_dict = dict(
-    output_dir="PEGA-finetune", # path to save the checkpoints
-    model_name_or_path='google/pegasus-large',
-    tokenizer_name_or_path='google/pegasus-large',
+    output_dir="BART-finetune", # path to save the checkpoints
+    model_name_or_path='GanjinZero/biobart-large',
+    tokenizer_name_or_path='GanjinZero/biobart-large',
     max_input_length=512,
-    max_output_length=84,
+    max_output_length=128,
     freeze_encoder=False,
     freeze_embeds=False,
-    learning_rate=0.00003,
+    learning_rate=0.00006,
     weight_decay=0.0,
-    adam_epsilon=1e-8,
-    warmup_steps=600,
-    train_batch_size=4,
-    eval_batch_size=16,
-    num_train_epochs=60,
-    gradient_accumulation_steps=8,
-    n_gpu=2,
+    adam_epsilon=1e-7,
+    warmup_steps=0,
+    train_batch_size=2,
+    eval_batch_size=8,
+    num_train_epochs=50,
+    gradient_accumulation_steps=16,
+    n_gpu=1,
     resume_from_checkpoint=None, 
     val_check_interval = 0.05, 
     n_val=1000,
@@ -601,11 +645,12 @@ args_dict = dict(
     seed=42,
     tau=1.0,
     lambda_CL=1.0,
-    lambda_medical=0.001
+    lambda_medical=0.0021,
+    lambda_negation=0.0021
 )
 
 
-args_dict.update({'output_dir': 'pega_our', 'num_train_epochs':20,'train_batch_size': 4, 'eval_batch_size': 16})
+args_dict.update({'output_dir': 'biobart_our', 'num_train_epochs':10,'train_batch_size': 2, 'eval_batch_size': 8})
 args = argparse.Namespace(**args_dict)
 
 ## Define Checkpoint function
@@ -632,10 +677,10 @@ train_params = dict(
 def get_dataset(tokenizer, type_path, num_samples, args):
     return OwnData(tokenizer=tokenizer, type_path=type_path, num_samples=num_samples, input_length=args.max_input_length, output_length=args.max_output_length)
 
-model = PegaFineTuner(args)
+model = BartFineTuner(args)
 
 trainer = pl.Trainer(**train_params)
-print (" Training model")
+print ("Training model")
 trainer.fit(model)
 
 

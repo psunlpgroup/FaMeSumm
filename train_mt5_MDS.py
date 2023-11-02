@@ -8,6 +8,8 @@ import random
 import re
 from itertools import chain
 from string import punctuation
+import jieba
+import pyrouge
 from tqdm import tqdm
 
 import nltk
@@ -27,31 +29,31 @@ import scipy.special
 
 from transformers import (
     AdamW,
-    PegasusForConditionalGeneration,
-    PegasusTokenizer,
+    MT5ForConditionalGeneration,
+    AutoTokenizer,
     get_linear_schedule_with_warmup
 )
 
 import wandb
 YOUR_API_KEY = ''
 os.environ["WANDB_API_KEY"] = YOUR_API_KEY
-wandb_logger = WandbLogger(project='MQA_Pega')
+wandb_logger = WandbLogger(project='medical1')
 
 
 def set_seed(seed):
-    random.randint(0, 4)
+    random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
 
-class PegaFineTuner(pl.LightningModule):
+class T5FineTuner(pl.LightningModule):
     def __init__(self, hparams):
-        super(PegaFineTuner, self).__init__()
-        self.hparams = hparams
-        self.model = PegasusForConditionalGeneration.from_pretrained(hparams.model_name_or_path)
-        self.tokenizer = PegasusTokenizer.from_pretrained(hparams.tokenizer_name_or_path, use_fast=False)
+        super(T5FineTuner, self).__init__()
+        self.hparams = hparams   
+        self.model = MT5ForConditionalGeneration.from_pretrained(hparams.model_name_or_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(hparams.tokenizer_name_or_path, use_fast=False)
         self.training_data = Resource(tokenizer=self.tokenizer, type_path="train", num_samples=None, input_length=self.hparams.max_input_length, output_length=self.hparams.max_output_length)
         
         if self.hparams.freeze_embeds:
@@ -77,7 +79,7 @@ class PegaFineTuner(pl.LightningModule):
             
             
     def freeze_embeds(self):
-        """Freeze token embeddings and positional embeddings for bart, just token embeddings for PEGASUS."""
+        """Freeze token embeddings and positional embeddings for bart, just token embeddings for t5."""
         try:
             self.freeze_params(self.model.model.shared)
             for d in [self.model.model.encoder, self.model.model.decoder]:
@@ -91,6 +93,7 @@ class PegaFineTuner(pl.LightningModule):
     def lmap(self, f, x):
         """list(map(f, x))"""
         return list(map(f, x))
+    
 
     def is_logger(self):
         return self.trainer.proc_rank <= 0
@@ -102,12 +105,12 @@ class PegaFineTuner(pl.LightningModule):
     
 
     def compute_contrastive_loss(self, pos_h, neg_h):
-        binomial_coefficient, loss = scipy.special.comb(len(pos_h), 2), torch.tensor(0.0).type_as(pos_h[0])
+        binomial_coefficient, loss = scipy.special.comb(len(pos_h), 2), torch.tensor(0.0).cuda()
         
         for i in range(len(pos_h)):
             for j in range(len(pos_h)):
                 if i == j: continue
-                numerator, denominator = torch.exp(self.cos(pos_h[i], pos_h[j]) / self.hparams.tau).type_as(pos_h[0]), torch.tensor(0.0).type_as(pos_h[0])
+                numerator, denominator = torch.exp(self.cos(pos_h[i], pos_h[j]) / self.hparams.tau).cuda(), torch.tensor(0.0).cuda()
 
                 for k in range(len(neg_h)):
                     denominator += torch.exp(self.cos(pos_h[i], neg_h[k]) / self.hparams.tau)
@@ -120,6 +123,8 @@ class PegaFineTuner(pl.LightningModule):
         
         return -1 / scipy.special.comb(len(pos_h), 2) * loss
 
+
+        
     def forward(
       self, input_ids, attention_mask=None, decoder_input_ids=None, decoder_attention_mask=None, labels=None
   ):
@@ -132,7 +137,6 @@ class PegaFineTuner(pl.LightningModule):
             output_hidden_states=True
     )
 
-
     def _step(self, batch, training_mode=False):
         batch_labels = batch["target_ids"]
         batch_labels[batch_labels[:, :] == self.tokenizer.pad_token_id] = -100
@@ -144,31 +148,28 @@ class PegaFineTuner(pl.LightningModule):
             decoder_attention_mask=batch['target_mask']
         )
 
-        effective_batch_size = outputs.logits.size()[0]
-        
         if training_mode:
-            medical_loss, negation_loss, contrastive_loss = torch.tensor(0.0).type_as(outputs[0]), torch.tensor(0.0).type_as(outputs[0]), torch.tensor(0.0).type_as(outputs[0])
+            medical_loss, negation_loss, contrastive_loss = torch.tensor(0.0).cuda(), torch.tensor(0.0).cuda(), torch.tensor(0.0).cuda()
 
-            for i in range(effective_batch_size):
+            for i in range(self.hparams.train_batch_size):
                 total_att = torch.mean(outputs.logits[i], 0) # reduce sequence_length
 
                 idx = batch["id"][i].item()
-                medical_terms_2, neg_uni = self.training_data[idx]['medical_terms_2'] + self.training_data[idx]['medical_terms_1'], self.training_data[idx]['neg_uni']
-                source = batch_labels[i]
+                medical_terms_2 = self.training_data[idx]['medical_terms_2'] + self.training_data[idx]['medical_terms_1']
+                source, presence_neg = batch_labels[i], []
+                for e in neg_unigrams_ids:
+                    presence_neg += (source == e).nonzero(as_tuple=True)[0].tolist()
 
                 # update negation_loss
-                if len(neg_uni) > 0:
-                    for term in neg_uni:
-                        id_comb = neg_unigrams_ids[term]
-                        for j in range(id_comb.size()[0]):
-                            neg_id = id_comb[j].item()
-                            presence_neg = (source == neg_id).nonzero(as_tuple=True)[0].tolist()
-
-                            # corner case
-                            if len(presence_neg) == 0: continue
-
-                            for p in presence_neg:
-                                medical_loss += total_att[source[p]]
+                if len(presence_neg) > 0:
+                    neg_id = []
+                    for p in presence_neg:
+                        if p < self.hparams.max_output_length - 1:
+                            neg_id.append(source[p])
+                            neg_id.append(source[p+1])
+            
+                    for element in neg_id:
+                        medical_loss += total_att[element]
 
 
                 # update medical_loss
@@ -219,13 +220,13 @@ class PegaFineTuner(pl.LightningModule):
                 source_att_mask_pos = torch.stack((source_att_mask_list_pos))
                 labels_pos = torch.stack((labels_list_pos))
                 d_att_mask_pos = torch.stack((d_att_mask_list_pos))
-                outs_pos = self(input_ids=source_id_pos, attention_mask=source_att_mask_pos, labels=labels_pos.type_as(batch_labels), decoder_attention_mask=d_att_mask_pos.type_as(batch_labels)).decoder_hidden_states[-1]
+                outs_pos = self(input_ids=source_id_pos, attention_mask=source_att_mask_pos, labels=labels_pos.cuda(), decoder_attention_mask=d_att_mask_pos.cuda()).decoder_hidden_states[-1]
 
                 source_id_neg = torch.stack((source_id_list_neg))
                 source_att_mask_neg = torch.stack((source_att_mask_list_neg))
                 labels_neg = torch.stack((labels_list_neg))
                 d_att_mask_neg = torch.stack((d_att_mask_list_neg))
-                outs_neg = self(input_ids=source_id_neg, attention_mask=source_att_mask_neg, labels=labels_neg.type_as(batch_labels), decoder_attention_mask=d_att_mask_neg.type_as(batch_labels)).decoder_hidden_states[-1]
+                outs_neg = self(input_ids=source_id_neg, attention_mask=source_att_mask_neg, labels=labels_neg.cuda(), decoder_attention_mask=d_att_mask_neg.cuda()).decoder_hidden_states[-1]
 
                 for z in range(len(self.training_data[idx]["pos_set"])):
                     outs = outs_pos[z]
@@ -240,18 +241,19 @@ class PegaFineTuner(pl.LightningModule):
         loss = outputs[0]
 
         if training_mode:
-            loss += self.hparams.lambda_CL * contrastive_loss / effective_batch_size
-            loss -= self.hparams.lambda_medical * medical_loss / effective_batch_size
+            loss += self.hparams.lambda_CL * contrastive_loss / self.hparams.train_batch_size
+            loss -= self.hparams.lambda_medical * medical_loss / self.hparams.train_batch_size
 
         return loss
-
-
+    
+    
     def ids_to_clean_text(self, generated_ids):
         gen_text = self.tokenizer.batch_decode(
             generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=True
         )
         return self.lmap(str.strip, gen_text)
-
+    
+    
     def _generative_step(self, batch) :
         
         t0 = time.time()
@@ -260,7 +262,7 @@ class PegaFineTuner(pl.LightningModule):
             attention_mask=batch["source_mask"],
             use_cache=True,
             decoder_attention_mask=batch['target_mask'],
-            max_length=168, 
+            max_length=84, 
             num_beams=2,
             repetition_penalty=1.5, 
             length_penalty=1.4, 
@@ -275,7 +277,7 @@ class PegaFineTuner(pl.LightningModule):
         base_metrics = {'val_loss': loss}
 #         rouge: Dict = self.calc_generative_metrics(preds, target)
         summ_len = np.mean(self.lmap(len, generated_ids))
-        base_metrics.update(gen_time=torch.tensor(gen_time).to(loss.device), gen_len=torch.tensor(summ_len).to(loss.device), preds=preds, target=target)
+        base_metrics.update(gen_time=gen_time, gen_len=summ_len, preds=preds, target=target)
         # self.rouge_metric.add_batch(preds, target)
         
 #         rouge_results = self.rouge_metric.compute() 
@@ -290,7 +292,7 @@ class PegaFineTuner(pl.LightningModule):
 
         tensorboard_logs = {"train_loss": loss}
         return {"loss": loss, "log": tensorboard_logs}
-
+  
     def training_epoch_end(self, outputs):
         avg_train_loss = torch.stack([x["loss"] for x in outputs]).mean()
         tensorboard_logs = {"avg_train_loss": avg_train_loss}
@@ -301,8 +303,8 @@ class PegaFineTuner(pl.LightningModule):
     
   
     def validation_epoch_end(self, outputs):
-        avg_loss = torch.cat([x["val_loss"] for x in outputs]).mean()
-        # avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
+        
+        avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
         tensorboard_logs = {"val_loss": avg_loss}
         return {"avg_val_loss": avg_loss, "log": tensorboard_logs, 'progress_bar': tensorboard_logs}
 
@@ -318,13 +320,13 @@ class PegaFineTuner(pl.LightningModule):
             },
             {
                 "params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
-                "weight_decay": 0.0,
+                "weight_decay": 0.1,
             },
         ]
-        optimizer = AdamW(optimizer_grouped_parameters, lr=self.hparams.learning_rate, weight_decay=0.0, eps=self.hparams.adam_epsilon)
+        optimizer = AdamW(optimizer_grouped_parameters, lr=self.hparams.learning_rate, weight_decay=0.1, eps=self.hparams.adam_epsilon)
         self.opt = optimizer
         return [optimizer]
-
+  
     def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_idx, second_order_closure=None, using_native_amp=False):
         if self.trainer.use_tpu:
             xm.optimizer_step(optimizer)
@@ -357,8 +359,16 @@ class PegaFineTuner(pl.LightningModule):
     def val_dataloader(self):
         n_samples = self.n_obs['validation']
         validation_dataset = get_dataset(tokenizer=self.tokenizer, type_path="validation", num_samples=n_samples, args=self.hparams)
-
+        
         return DataLoader(validation_dataset, batch_size=self.hparams.eval_batch_size, num_workers=4)
+    
+    
+    # def test_dataloader(self):
+    #     n_samples = self.n_obs['test']
+    #     return get_dataset(tokenizer=self.tokenizer, type_path="test", num_samples=n_samples, args=self.hparams)
+        
+        # return DataLoader(test_dataset, batch_size=self.hparams.eval_batch_size, num_workers=4)
+
 
 class LoggingCallback(pl.Callback):
     def on_validation_end(self, trainer, pl_module):
@@ -387,26 +397,30 @@ class LoggingCallback(pl.Callback):
 
 class Resource(Dataset):
     def __init__(self, tokenizer, type_path, num_samples, input_length, output_length, print_text=False):         
-        file, dataset_list, count = "HQS_dataset/" + type_path + ".txt", [], 0
+        file, dataset_list, count = "MDS_dataset/" + type_path + ".txt", [], 0
         with open(file, 'r') as input:
             for jsonObj in input:
-                patientDict, d = json.loads(jsonObj), {}
+                patientDict, text, d = json.loads(jsonObj), "", {}
+                for i in range(len(patientDict["content"])):
+                    if i + 1 < len(patientDict["content"]):
+                        text += patientDict["content"][i]["utterance"] + " "
+                    else:
+                        text += patientDict["content"][i]["utterance"]
+                typeB = patientDict["summary"]["type-B"]
                 
                 d["id"] = count
-                d["text"] = patientDict["question"]
-                d["headline"] = patientDict["summary"]
+                d["text"] = text
+                d["headline"] = typeB
                 d["medical_terms_both"] = patientDict["2_medical"]
                 d["medical_terms_one"] = patientDict["1_medical"]
-                d["neg_uni"] = patientDict["neg_uni"]
-                
                 d["pos"] = []
                 d["neg"] = []
-
-                for name in glob.iglob("HQS_dataset/P&N/Positive/" + str(count) + "/*.txt"):
+                num = str(patientDict["id"])
+                for name in glob.iglob("MDS_dataset/P&N/Positive/" + num + "/*.txt"):
                     with open(name, 'r', encoding='utf8') as f:
                         d["pos"].append(f.readlines()[0])
 
-                for name in glob.iglob("HQS_dataset/P&N/Negative/" + str(count) + "/*.txt"):
+                for name in glob.iglob("MDS_dataset/P&N/Negative/" + num + "/*.txt"):
                     with open(name, 'r', encoding='utf8') as f:
                         d["neg"].append(f.readlines()[0])
 
@@ -471,23 +485,29 @@ class Resource(Dataset):
 
         medical_terms_2 = self.dataset[index]["medical_terms_both"]
         medical_terms_1 = self.dataset[index]["medical_terms_one"]
-        neg_uni = self.dataset[index]["neg_uni"]
 
-        return {"source_ids": source_ids, "source_mask": src_mask, "target_ids": target_ids, "target_mask": target_mask, "pos_set": pos_set, "neg_set": neg_set, "medical_terms_2": medical_terms_2, "medical_terms_1": medical_terms_1, "neg_uni": neg_uni}
+        return {"source_ids": source_ids, "source_mask": src_mask, "target_ids": target_ids, "target_mask": target_mask, "pos_set": pos_set, "neg_set": neg_set, "medical_terms_2": medical_terms_2, "medical_terms_1": medical_terms_1}
+
 
 
 
 
 class OwnData(Dataset):
     def __init__(self, tokenizer, type_path, num_samples, input_length, output_length, print_text=False):         
-        file, dataset_list, count = "HQS_dataset/" + type_path + ".txt", [], 0
+        file, dataset_list, count = "MDS_dataset/" + type_path + ".txt", [], 0
         with open(file, 'r') as input:
             for jsonObj in input:
-                patientDict, d = json.loads(jsonObj), {}
+                patientDict, text, d = json.loads(jsonObj), "", {}
+                for i in range(len(patientDict["content"])):
+                    if i + 1 < len(patientDict["content"]):
+                        text += patientDict["content"][i]["utterance"] + " "
+                    else:
+                        text += patientDict["content"][i]["utterance"]
+                typeB = patientDict["summary"]["type-B"]
                 
                 d["id"] = count
-                d["text"] = patientDict["question"]
-                d["headline"] = patientDict["summary"]
+                d["text"] = text
+                d["headline"] = typeB
 
                 dataset_list.append(d)
                 count += 1
@@ -528,6 +548,7 @@ class OwnData(Dataset):
         targets = self.tokenizer.batch_encode_plus([target_], max_length=self.output_length, 
                                                      padding='max_length', truncation=True, return_tensors="pt")
         
+       
         return source, targets
   
     def __getitem__(self, index):
@@ -542,54 +563,47 @@ class OwnData(Dataset):
         return {"source_ids": source_ids, "source_mask": src_mask, "target_ids": target_ids, "target_mask": target_mask, "id": self.dataset[index]["id"]}
 
 
-
 set_seed(42)
 
-
-medical_term_ids, tokenizer = {}, PegasusTokenizer.from_pretrained('google/pegasus-large', use_fast=False)
-with open('HQS_dataset/ALL_medical_term_file_train.txt', 'r', encoding='utf8') as f:
+medical_term_ids, tokenizer = {}, AutoTokenizer.from_pretrained('google/mt5-small', use_fast=False)
+with open('MDS_dataset/ALL_medical_term_file_train.txt', 'r', encoding='utf8') as f:
     custom_noun = f.readlines()
     for i in range(len(custom_noun)):
         medical_term = custom_noun[i].replace('\n', '')
         ids = tokenizer.batch_encode_plus([medical_term], truncation=True, return_tensors="pt")['input_ids'][0]
-        # remove 1
+        # remove 259 and 1
+        if ids[0].item() == 259:
+            ids = torch.cat([ids[0:0], ids[1:]])
         if ids[-1].item() == 1:
             ids = torch.cat([ids[0:ids.size()[0]-1], ids[ids.size()[0]:]])
         
         medical_term_ids[medical_term] = ids
 print("Finished reading medical_term_file.txt !")
 
-
-neg_unigrams, neg_unigrams_ids = ["no", "nope", "doesn't", "don't", "not"], {}
+neg_unigrams, neg_unigrams_ids = ["不", "没有", "无", "没", "非"], []
 for e in neg_unigrams:
-    ids = tokenizer.batch_encode_plus([e], truncation=True, return_tensors="pt")['input_ids'][0]
-    # remove 1
-    if ids[-1].item() == 1:
-        ids = torch.cat([ids[0:ids.size()[0]-1], ids[ids.size()[0]:]])
-    
-    neg_unigrams_ids[e] = ids
+    neg_unigrams_ids.append(tokenizer.batch_encode_plus([e], truncation=True, return_tensors="pt")['input_ids'][0][1].item())
 print("Finished construction of neg_unigrams_ids!")
-
 
 logger = logging.getLogger(__name__)
 args_dict = dict(
-    output_dir="PEGA-finetune", # path to save the checkpoints
-    model_name_or_path='google/pegasus-large',
-    tokenizer_name_or_path='google/pegasus-large',
+    output_dir="mT5-finetune", # path to save the checkpoints
+    model_name_or_path='google/mt5-small',
+    tokenizer_name_or_path='google/mt5-small',
     max_input_length=512,
     max_output_length=84,
     freeze_encoder=False,
     freeze_embeds=False,
-    learning_rate=0.00003,
-    weight_decay=0.0,
-    adam_epsilon=1e-8,
-    warmup_steps=600,
+    learning_rate=0.0005,
+    weight_decay=0.1,
+    adam_epsilon=1e-7,
+    warmup_steps=1000,
     train_batch_size=4,
-    eval_batch_size=16,
-    num_train_epochs=60,
-    gradient_accumulation_steps=8,
-    n_gpu=2,
-    resume_from_checkpoint=None, 
+    eval_batch_size=8,
+    num_train_epochs=40,
+    gradient_accumulation_steps=16,
+    n_gpu=1,
+    resume_from_checkpoint=None,
     val_check_interval = 0.05, 
     n_val=1000,
     n_train=-1,
@@ -601,11 +615,11 @@ args_dict = dict(
     seed=42,
     tau=1.0,
     lambda_CL=1.0,
-    lambda_medical=0.001
+    lambda_medical=0.0014,
+    lambda_negation=0.0014
 )
 
-
-args_dict.update({'output_dir': 'pega_our', 'num_train_epochs':20,'train_batch_size': 4, 'eval_batch_size': 16})
+args_dict.update({'output_dir': 'mt5_our', 'num_train_epochs':40,'train_batch_size': 4, 'eval_batch_size': 8})
 args = argparse.Namespace(**args_dict)
 
 ## Define Checkpoint function
@@ -625,14 +639,12 @@ train_params = dict(
     val_check_interval=args.val_check_interval,
     logger=wandb_logger,
     callbacks=[LoggingCallback()],
-    sync_batchnorm=True,
-    accelerator='dp'
 )
 
 def get_dataset(tokenizer, type_path, num_samples, args):
     return OwnData(tokenizer=tokenizer, type_path=type_path, num_samples=num_samples, input_length=args.max_input_length, output_length=args.max_output_length)
 
-model = PegaFineTuner(args)
+model = T5FineTuner(args)
 
 trainer = pl.Trainer(**train_params)
 print (" Training model")
@@ -640,3 +652,6 @@ trainer.fit(model)
 
 
 print ("training finished")
+
+
+

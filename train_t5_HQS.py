@@ -27,15 +27,15 @@ import scipy.special
 
 from transformers import (
     AdamW,
-    PegasusForConditionalGeneration,
-    PegasusTokenizer,
+    T5ForConditionalGeneration,
+    T5Tokenizer,
     get_linear_schedule_with_warmup
 )
 
 import wandb
 YOUR_API_KEY = ''
 os.environ["WANDB_API_KEY"] = YOUR_API_KEY
-wandb_logger = WandbLogger(project='MQA_Pega')
+wandb_logger = WandbLogger(project='MQA_t5')
 
 
 def set_seed(seed):
@@ -46,12 +46,12 @@ def set_seed(seed):
         torch.cuda.manual_seed_all(seed)
 
 
-class PegaFineTuner(pl.LightningModule):
+class T5FineTuner(pl.LightningModule):
     def __init__(self, hparams):
-        super(PegaFineTuner, self).__init__()
+        super(T5FineTuner, self).__init__()
         self.hparams = hparams
-        self.model = PegasusForConditionalGeneration.from_pretrained(hparams.model_name_or_path)
-        self.tokenizer = PegasusTokenizer.from_pretrained(hparams.tokenizer_name_or_path, use_fast=False)
+        self.model = T5ForConditionalGeneration.from_pretrained(hparams.model_name_or_path)
+        self.tokenizer = T5Tokenizer.from_pretrained(hparams.tokenizer_name_or_path, use_fast=False)
         self.training_data = Resource(tokenizer=self.tokenizer, type_path="train", num_samples=None, input_length=self.hparams.max_input_length, output_length=self.hparams.max_output_length)
         
         if self.hparams.freeze_embeds:
@@ -77,7 +77,7 @@ class PegaFineTuner(pl.LightningModule):
             
             
     def freeze_embeds(self):
-        """Freeze token embeddings and positional embeddings for bart, just token embeddings for PEGASUS."""
+        """Freeze token embeddings and positional embeddings for bart, just token embeddings for T5."""
         try:
             self.freeze_params(self.model.model.shared)
             for d in [self.model.model.encoder, self.model.model.decoder]:
@@ -301,8 +301,8 @@ class PegaFineTuner(pl.LightningModule):
     
   
     def validation_epoch_end(self, outputs):
-        avg_loss = torch.cat([x["val_loss"] for x in outputs]).mean()
-        # avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
+        # avg_loss = torch.cat([x["val_loss"] for x in outputs]).mean()
+        avg_loss = torch.stack([x["val_loss"] for x in outputs]).mean()
         tensorboard_logs = {"val_loss": avg_loss}
         return {"avg_val_loss": avg_loss, "log": tensorboard_logs, 'progress_bar': tensorboard_logs}
 
@@ -546,7 +546,7 @@ class OwnData(Dataset):
 set_seed(42)
 
 
-medical_term_ids, tokenizer = {}, PegasusTokenizer.from_pretrained('google/pegasus-large', use_fast=False)
+medical_term_ids, tokenizer = {}, T5Tokenizer.from_pretrained('t5-base', use_fast=False)
 with open('HQS_dataset/ALL_medical_term_file_train.txt', 'r', encoding='utf8') as f:
     custom_noun = f.readlines()
     for i in range(len(custom_noun)):
@@ -573,22 +573,22 @@ print("Finished construction of neg_unigrams_ids!")
 
 logger = logging.getLogger(__name__)
 args_dict = dict(
-    output_dir="PEGA-finetune", # path to save the checkpoints
-    model_name_or_path='google/pegasus-large',
-    tokenizer_name_or_path='google/pegasus-large',
+    output_dir="T5-finetune", # path to save the checkpoints
+    model_name_or_path='t5-base',
+    tokenizer_name_or_path='t5-base',
     max_input_length=512,
     max_output_length=84,
     freeze_encoder=False,
     freeze_embeds=False,
-    learning_rate=0.00003,
+    learning_rate=0.00055,
     weight_decay=0.0,
-    adam_epsilon=1e-8,
-    warmup_steps=600,
-    train_batch_size=4,
-    eval_batch_size=16,
+    adam_epsilon=1e-7,
+    warmup_steps=1500,
+    train_batch_size=2,
+    eval_batch_size=4,
     num_train_epochs=60,
     gradient_accumulation_steps=8,
-    n_gpu=2,
+    n_gpu=1,
     resume_from_checkpoint=None, 
     val_check_interval = 0.05, 
     n_val=1000,
@@ -600,12 +600,13 @@ args_dict = dict(
     max_grad_norm=1.0, # if you enable 16-bit training then set this to a sensible value, 0.5 is a good default
     seed=42,
     tau=1.0,
-    lambda_CL=1.0,
-    lambda_medical=0.001
+    lambda_CL=2.5,
+    lambda_medical=0.0009,
+    lambda_negation=0.0009
 )
 
 
-args_dict.update({'output_dir': 'pega_our', 'num_train_epochs':20,'train_batch_size': 4, 'eval_batch_size': 16})
+args_dict.update({'output_dir': 't5_our', 'num_train_epochs':10,'train_batch_size': 2, 'eval_batch_size': 4})
 args = argparse.Namespace(**args_dict)
 
 ## Define Checkpoint function
@@ -632,7 +633,7 @@ train_params = dict(
 def get_dataset(tokenizer, type_path, num_samples, args):
     return OwnData(tokenizer=tokenizer, type_path=type_path, num_samples=num_samples, input_length=args.max_input_length, output_length=args.max_output_length)
 
-model = PegaFineTuner(args)
+model = T5FineTuner(args)
 
 trainer = pl.Trainer(**train_params)
 print (" Training model")

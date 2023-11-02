@@ -35,11 +35,10 @@ from transformers import (
 import wandb
 YOUR_API_KEY = ''
 os.environ["WANDB_API_KEY"] = YOUR_API_KEY
-wandb_logger = WandbLogger(project='MQA_Pega')
+wandb_logger = WandbLogger(project='RR')
 
 
 def set_seed(seed):
-    random.randint(0, 4)
     np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
@@ -321,7 +320,7 @@ class PegaFineTuner(pl.LightningModule):
                 "weight_decay": 0.0,
             },
         ]
-        optimizer = AdamW(optimizer_grouped_parameters, lr=self.hparams.learning_rate, weight_decay=0.0, eps=self.hparams.adam_epsilon)
+        optimizer = AdamW(optimizer_grouped_parameters, lr=self.hparams.learning_rate, eps=self.hparams.adam_epsilon)
         self.opt = optimizer
         return [optimizer]
 
@@ -387,13 +386,13 @@ class LoggingCallback(pl.Callback):
 
 class Resource(Dataset):
     def __init__(self, tokenizer, type_path, num_samples, input_length, output_length, print_text=False):         
-        file, dataset_list, count = "HQS_dataset/" + type_path + ".txt", [], 0
+        file, dataset_list, count = "Radiology_dataset/" + type_path + ".txt", [], 0
         with open(file, 'r') as input:
             for jsonObj in input:
                 patientDict, d = json.loads(jsonObj), {}
                 
                 d["id"] = count
-                d["text"] = patientDict["question"]
+                d["text"] = patientDict["text"]
                 d["headline"] = patientDict["summary"]
                 d["medical_terms_both"] = patientDict["2_medical"]
                 d["medical_terms_one"] = patientDict["1_medical"]
@@ -402,11 +401,11 @@ class Resource(Dataset):
                 d["pos"] = []
                 d["neg"] = []
 
-                for name in glob.iglob("HQS_dataset/P&N/Positive/" + str(count) + "/*.txt"):
+                for name in glob.iglob("Radiology_dataset/P&N/Positive/" + str(count) + "/*.txt"):
                     with open(name, 'r', encoding='utf8') as f:
                         d["pos"].append(f.readlines()[0])
 
-                for name in glob.iglob("HQS_dataset/P&N/Negative/" + str(count) + "/*.txt"):
+                for name in glob.iglob("Radiology_dataset/P&N/Negative/" + str(count) + "/*.txt"):
                     with open(name, 'r', encoding='utf8') as f:
                         d["neg"].append(f.readlines()[0])
 
@@ -480,13 +479,13 @@ class Resource(Dataset):
 
 class OwnData(Dataset):
     def __init__(self, tokenizer, type_path, num_samples, input_length, output_length, print_text=False):         
-        file, dataset_list, count = "HQS_dataset/" + type_path + ".txt", [], 0
+        file, dataset_list, count = "Radiology_dataset/" + type_path + ".txt", [], 0
         with open(file, 'r') as input:
             for jsonObj in input:
                 patientDict, d = json.loads(jsonObj), {}
                 
                 d["id"] = count
-                d["text"] = patientDict["question"]
+                d["text"] = patientDict["text"]
                 d["headline"] = patientDict["summary"]
 
                 dataset_list.append(d)
@@ -543,11 +542,11 @@ class OwnData(Dataset):
 
 
 
-set_seed(42)
+set_seed(1)
 
 
 medical_term_ids, tokenizer = {}, PegasusTokenizer.from_pretrained('google/pegasus-large', use_fast=False)
-with open('HQS_dataset/ALL_medical_term_file_train.txt', 'r', encoding='utf8') as f:
+with open('Radiology_dataset/ALL_medical_term_file_train.txt', 'r', encoding='utf8') as f:
     custom_noun = f.readlines()
     for i in range(len(custom_noun)):
         medical_term = custom_noun[i].replace('\n', '')
@@ -577,35 +576,36 @@ args_dict = dict(
     model_name_or_path='google/pegasus-large',
     tokenizer_name_or_path='google/pegasus-large',
     max_input_length=512,
-    max_output_length=84,
+    max_output_length=128,
     freeze_encoder=False,
     freeze_embeds=False,
-    learning_rate=0.00003,
+    learning_rate=0.0004,
     weight_decay=0.0,
     adam_epsilon=1e-8,
-    warmup_steps=600,
+    warmup_steps=800,
     train_batch_size=4,
-    eval_batch_size=16,
-    num_train_epochs=60,
-    gradient_accumulation_steps=8,
+    eval_batch_size=64,
+    num_train_epochs=25,
+    gradient_accumulation_steps=16,
     n_gpu=2,
     resume_from_checkpoint=None, 
     val_check_interval = 0.05, 
-    n_val=1000,
+    n_val=-1,
     n_train=-1,
     n_test=-1,
     early_stop_callback=False,
     fp_16=False, # if you want to enable 16-bit training then install apex and set this to true
     opt_level='O1', # you can find out more on optimisation levels here https://nvidia.github.io/apex/amp.html#opt-levels-and-properties
     max_grad_norm=1.0, # if you enable 16-bit training then set this to a sensible value, 0.5 is a good default
-    seed=42,
+    seed=1,
     tau=1.0,
-    lambda_CL=1.0,
-    lambda_medical=0.001
+    lambda_CL=0.8,
+    lambda_medical=0.0014,
+    lambda_negation=0.0014
 )
 
 
-args_dict.update({'output_dir': 'pega_our', 'num_train_epochs':20,'train_batch_size': 4, 'eval_batch_size': 16})
+args_dict.update({'output_dir': 'pega_our', 'num_train_epochs':25,'train_batch_size': 4, 'eval_batch_size': 64})
 args = argparse.Namespace(**args_dict)
 
 ## Define Checkpoint function
