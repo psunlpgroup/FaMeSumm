@@ -11,7 +11,7 @@ import nlpaug.augmenter.word as naw
 aug = naw.BackTranslationAug(device='cuda')
 
 
-path_train, json_list = "train_RRS.txt", []
+path_train, json_list = "train.txt", []
 with open(path_train, 'r') as input:
 	for jsonObj in input:
 		patientDict = json.loads(jsonObj)

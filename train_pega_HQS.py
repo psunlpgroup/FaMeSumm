@@ -33,7 +33,7 @@ from transformers import (
 )
 
 import wandb
-YOUR_API_KEY = '81b73f5340daf141a9f9f24d0e03191c8b70cb0f'
+YOUR_API_KEY = ''
 os.environ["WANDB_API_KEY"] = YOUR_API_KEY
 wandb_logger = WandbLogger(project='MQA_Pega')
 
@@ -387,7 +387,7 @@ class LoggingCallback(pl.Callback):
 
 class Resource(Dataset):
     def __init__(self, tokenizer, type_path, num_samples, input_length, output_length, print_text=False):         
-        file, dataset_list, count = "/export/home/njz5124/QS/Dataset_bug_fixed/" + type_path + ".txt", [], 0
+        file, dataset_list, count = "HQS_dataset/" + type_path + ".txt", [], 0
         with open(file, 'r') as input:
             for jsonObj in input:
                 patientDict, d = json.loads(jsonObj), {}
@@ -402,11 +402,11 @@ class Resource(Dataset):
                 d["pos"] = []
                 d["neg"] = []
 
-                for name in glob.iglob("/export/home/njz5124/QS/P&N/Positive/" + str(count) + "/*.txt"):
+                for name in glob.iglob("HQS_dataset/P&N/Positive/" + str(count) + "/*.txt"):
                     with open(name, 'r', encoding='utf8') as f:
                         d["pos"].append(f.readlines()[0])
 
-                for name in glob.iglob("/export/home/njz5124/QS/P&N/Negative/" + str(count) + "/*.txt"):
+                for name in glob.iglob("HQS_dataset/P&N/Negative/" + str(count) + "/*.txt"):
                     with open(name, 'r', encoding='utf8') as f:
                         d["neg"].append(f.readlines()[0])
 
@@ -480,7 +480,7 @@ class Resource(Dataset):
 
 class OwnData(Dataset):
     def __init__(self, tokenizer, type_path, num_samples, input_length, output_length, print_text=False):         
-        file, dataset_list, count = "/export/home/njz5124/QS/Dataset_bug_fixed/" + type_path + ".txt", [], 0
+        file, dataset_list, count = "HQS_dataset/" + type_path + ".txt", [], 0
         with open(file, 'r') as input:
             for jsonObj in input:
                 patientDict, d = json.loads(jsonObj), {}
@@ -547,7 +547,7 @@ set_seed(42)
 
 
 medical_term_ids, tokenizer = {}, PegasusTokenizer.from_pretrained('google/pegasus-large', use_fast=False)
-with open('/export/home/njz5124/QS/ALL_medical_term_file_train.txt', 'r', encoding='utf8') as f:
+with open('HQS_dataset/ALL_medical_term_file_train.txt', 'r', encoding='utf8') as f:
     custom_noun = f.readlines()
     for i in range(len(custom_noun)):
         medical_term = custom_noun[i].replace('\n', '')

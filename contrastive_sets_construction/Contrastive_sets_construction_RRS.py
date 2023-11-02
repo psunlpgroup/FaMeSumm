@@ -21,7 +21,7 @@ from pattern.text.en import singularize
 
 
 s = set()
-with open("train_RRS.txt", 'r') as input:
+with open("train.txt", 'r') as input:
     for jsonObj in input:
         patientDict = json.loads(jsonObj)
         for m in patientDict["1_medical"]:
@@ -29,7 +29,7 @@ with open("train_RRS.txt", 'r') as input:
         for m in patientDict["2_medical"]:
             s.add(m)
 
-with open("validation_RRS.txt", 'r') as input:
+with open("validation.txt", 'r') as input:
     for jsonObj in input:
         patientDict = json.loads(jsonObj)
         for m in patientDict["1_medical"]:
@@ -37,7 +37,7 @@ with open("validation_RRS.txt", 'r') as input:
         for m in patientDict["2_medical"]:
             s.add(m)
             
-with open("test_RRS.txt", 'r') as input:
+with open("test.txt", 'r') as input:
     for jsonObj in input:
         patientDict = json.loads(jsonObj)
         for m in patientDict["1_medical"]:
@@ -49,7 +49,7 @@ ALL_medical_term = list(s)
 
 
 # positive set
-path_train, path_base, count, no_type1, no_type2 = "train_RRS.txt", "Positive/", 0, set(), set()
+path_train, path_base, count, no_type1, no_type2 = "train.txt", "Positive/", 0, set(), set()
 with open(path_train, 'r') as input:
     for jsonObj in input:
         patientDict = json.loads(jsonObj)
@@ -126,7 +126,7 @@ with open(path_train, 'r') as input:
 
 
 # negative set
-path_train, path_base, count = "train_RRS.txt", "Negative/", 0
+path_train, path_base, count = "train.txt", "Negative/", 0
 with open(path_train, 'r') as input:
     for jsonObj in input:
         patientDict = json.loads(jsonObj)
