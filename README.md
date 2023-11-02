@@ -7,6 +7,7 @@ Navigation:
 [Contrastive Sets Construction](#contrastive-sets-construction),
 [Models and Experiments](#models-and-experiments),
 [Repository Structure](#repository-structure)
+[Acknowledgement](#acknowledgement)
 
 
 ## Overview
@@ -37,3 +38,9 @@ We provide the trained checkpoints of FaMeSumm models below:
 * [FaMeSumm + BioBART on HQS](https://pennstateoffice365-my.sharepoint.com/:u:/g/personal/njz5124_psu_edu/EUiqjFY7YJlGnmQvAoUzObUBVtS3tmwB-rNkYVTWtUlvog?e=dZDfzE)
 * [FaMeSumm + PEGASUS on RRS-Indiana](https://pennstateoffice365-my.sharepoint.com/:u:/g/personal/njz5124_psu_edu/EQ63sMuonjVPoYQflrdJYGwBBzD09E8xezPNKdtCCWstXA?e=m08Pv2)
 * [FaMeSumm + PEGASUS on RRS-Stanford](https://pennstateoffice365-my.sharepoint.com/:u:/g/personal/njz5124_psu_edu/Eap7sPuQVHdCpa9TyBCNS0AB-oyrnpbBRQbeR_EDUPDFUQ?e=ACpVrN)
+
+
+## Repository Structure
+
+## Acknowledgement
+
