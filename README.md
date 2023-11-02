@@ -59,7 +59,7 @@ Without using these checkpoints, you may fine-tune language models:
     #fine-tune mT5 on MDS
     python train_mt5_MDS.py
 
-You will need to provide the API key of your WandB account in line 36 or 38. All these training files require `ALL_medical_term_file_train.txt`, so you will need to collect all medical terms of the training set for each dataset (check `ALL_medical_term_file_Chinese.txt` in [contrastive_sets_construction](/contrastive_sets_construction) as an example).
+You will need to provide the API key of your WandB account in line 36 or 38. All these training files require `ALL_medical_term_file_train.txt`, so you will need to collect all medical terms (the collection of `1_medical` and `2_medical`) of the training set for each dataset. Specifically, check `ALL_medical_term_file_Chinese.txt` in [contrastive_sets_construction](/contrastive_sets_construction) as an example.
 
 To do inference:
 
