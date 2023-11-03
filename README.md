@@ -61,7 +61,11 @@ Without using these checkpoints, you may fine-tune language models:
 
 You will need to provide the API key of your WandB account in line 36 or 38. Please place the contrastive sets into a folder called `P&N` inside your dataset folder. All these training files require `ALL_medical_term_file_train.txt`, so you will need to collect all medical terms (the collection of `1_medical` and `2_medical`) of the training set for each dataset. You may check `ALL_medical_term_file_Chinese.txt` in [contrastive_sets_construction](/contrastive_sets_construction) as an example.
 
-To do inference:
+To do inference, refer to our code to run trained PEGASUS model below. Please change your checkpoint name at line 652. For other language models, you will need to replace the `PegaFineTuner` class in line 87 with the class you see in the corresponding fine-tuning file (e.g., `T5FineTuner`). You will also need to replace lines 585 to 595 with the corresponding lines in the fine-tuning file due to tokenizer differences.
+
+    python test_pega_HQS.py
+
+You will get ROUGE scores and C F1 after running the inference code. For other automatic metrics reported in our paper, we prepare `additional_metrics` folder and it contains the code for you to test model performance on different types of data. Note that each file in `additional_metrics` has its own requirements (e.g., trained model checkpoints and python environment), so please refer to its paper and/or GitHub repository to set things up.
 
 ## Repository Structure
 
