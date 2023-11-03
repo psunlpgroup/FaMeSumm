@@ -6,8 +6,8 @@ Navigation:
 [Datasets](#datasets),
 [Contrastive Sets Construction](#contrastive-sets-construction),
 [Models and Experiments](#models-and-experiments),
-[Repository Structure](#repository-structure)
-[Acknowledgement](#acknowledgement)
+[Acknowledgement](#acknowledgement),
+[Citation](#citation)
 
 
 ## Overview
@@ -65,9 +65,11 @@ To do inference, refer to our code to run trained PEGASUS model below. Please ch
 
     python test_pega_HQS.py
 
-You will get ROUGE scores and C F1 after running the inference code. For other automatic metrics reported in our paper, we prepare `additional_metrics` folder and it contains the code for you to test model performance on different types of data. Note that each file in `additional_metrics` has its own requirements (e.g., trained model checkpoints and python environment), so please refer to its paper and/or GitHub repository to set things up.
+You will get ROUGE scores and C F1 after running the inference code. For other automatic metrics reported in our paper, we prepare [additional_metrics](/additional_metrics) folder and it contains the code for you to test model performance on different types of data. Note that each file in `additional_metrics` has its own requirements (e.g., trained model checkpoints and python environment), so please refer to its paper and/or GitHub repository to set things up.
 
-## Repository Structure
 
 ## Acknowledgement
 * Our fine-tuning code is developed based on: https://github.com/priya-dwivedi/Deep-Learning/blob/master/wikihow-fine-tuning-T5/Tune_T5_WikiHow-Github.ipynb.
+
+
+## Citation
