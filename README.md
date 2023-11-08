@@ -1,5 +1,5 @@
 # FaMeSumm
-Code for EMNLP 2023 paper "FaMeSumm: Investigating and Improving Faithfulness of Medical Summarization"
+Code for EMNLP 2023 paper [FaMeSumm: Investigating and Improving Faithfulness of Medical Summarization](https://arxiv.org/abs/2311.02271).
 
 Navigation:
 [Overview](#overview), 
