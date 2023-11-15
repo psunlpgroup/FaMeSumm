@@ -73,3 +73,13 @@ You will get ROUGE scores and C F1 after running the inference code. For other a
 
 
 ## Citation
+```bibtex
+@misc{zhang2023famesumm,
+      title={FaMeSumm: Investigating and Improving Faithfulness of Medical Summarization}, 
+      author={Nan Zhang and Yusen Zhang and Wu Guo and Prasenjit Mitra and Rui Zhang},
+      year={2023},
+      eprint={2311.02271},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL}
+}
+```
