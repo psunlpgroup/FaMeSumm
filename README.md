@@ -74,12 +74,23 @@ You will get ROUGE scores and C F1 after running the inference code. For other a
 
 ## Citation
 ```bibtex
-@misc{zhang2023famesumm,
-      title={FaMeSumm: Investigating and Improving Faithfulness of Medical Summarization}, 
-      author={Nan Zhang and Yusen Zhang and Wu Guo and Prasenjit Mitra and Rui Zhang},
-      year={2023},
-      eprint={2311.02271},
-      archivePrefix={arXiv},
-      primaryClass={cs.CL}
+@inproceedings{zhang-etal-2023-famesumm,
+    title = "{F}a{M}e{S}umm: Investigating and Improving Faithfulness of Medical Summarization",
+    author = "Zhang, Nan  and
+      Zhang, Yusen  and
+      Guo, Wu  and
+      Mitra, Prasenjit  and
+      Zhang, Rui",
+    editor = "Bouamor, Houda  and
+      Pino, Juan  and
+      Bali, Kalika",
+    booktitle = "Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing",
+    month = dec,
+    year = "2023",
+    address = "Singapore",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2023.emnlp-main.673",
+    pages = "10915--10931",
+    abstract = "Summaries of medical text shall be faithful by being consistent and factual with source inputs, which is an important but understudied topic for safety and efficiency in healthcare. In this paper, we investigate and improve faithfulness in summarization on a broad range of medical summarization tasks. Our investigation reveals that current summarization models often produce unfaithful outputs for medical input text. We then introduce FaMeSumm, a framework to improve faithfulness by fine-tuning pre-trained language models based on medical knowledge. FaMeSumm performs contrastive learning on designed sets of faithful and unfaithful summaries, and it incorporates medical terms and their contexts to encourage faithful generation of medical terms. We conduct comprehensive experiments on three datasets in two languages: health question and radiology report summarization datasets in English, and a patient-doctor dialogue dataset in Chinese. Results demonstrate that FaMeSumm is flexible and effective by delivering consistent improvements over mainstream language models such as BART, T5, mT5, and PEGASUS, yielding state-of-the-art performances on metrics for faithfulness and general quality. Human evaluation by doctors also shows that FaMeSumm generates more faithful outputs. Our code is available at https://github.com/psunlpgroup/FaMeSumm.",
 }
 ```
